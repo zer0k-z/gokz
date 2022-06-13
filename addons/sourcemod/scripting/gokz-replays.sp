@@ -3,7 +3,7 @@
 #include <cstrike>
 #include <sdkhooks>
 #include <sdktools>
-
+#include <dhooks>
 #include <movementapi>
 
 #include <gokz/core>
@@ -69,6 +69,7 @@ public void OnPluginStart()
 	CreateGlobalForwards();
 	HookEvents();
 	RegisterCommands();
+	OnPluginStart_Playback();
 }
 
 public void OnAllPluginsLoaded()

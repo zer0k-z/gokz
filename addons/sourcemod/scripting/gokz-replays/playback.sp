@@ -49,7 +49,22 @@ static bool botJumped[RP_MAX_BOTS];
 static bool botIsTakeoff[RP_MAX_BOTS];
 static float botLandingSpeed[RP_MAX_BOTS];
 
-
+static Handle hGetPlayerMaxSpeed;
+public void OnPluginStart_Playback()
+{
+	GameData gameData = LoadGameConfigFile("movementapi.games");
+	if (gameData == INVALID_HANDLE)
+	{
+		SetFailState("Failed to find movementapi.games config");
+	}
+	
+	int offset = gameData.GetOffset("GetPlayerMaxSpeed");
+	if (offset == -1)
+	{
+		SetFailState("Failed to get GetPlayerMaxSpeed offset");
+	}
+	hGetPlayerMaxSpeed = DHookCreate(offset, HookType_Entity, ReturnType_Float, ThisPointer_CBaseEntity, DHooks_OnGetPlayerMaxSpeed);
+}
 
 // =====[ PUBLIC ]=====
 
@@ -254,6 +269,7 @@ void OnClientPutInServer_Playback(int client)
 		{
 			botInGame[bot] = true;
 			botClient[bot] = client;
+			DHookEntity(hGetPlayerMaxSpeed, true, client);
 			break;
 		}
 	}
@@ -301,6 +317,30 @@ void OnPlayerRunCmd_Playback(int client, int &buttons)
 	}
 }
 
+public MRESReturn DHooks_OnGetPlayerMaxSpeed(int client, Handle hReturn)
+{
+	if (!IsPlayerAlive(client))
+	{
+		return MRES_Ignored;
+	}
+	for (int i = 0; i < RP_MAX_BOTS; i++)
+	{
+		if (botClient[i] == client)
+		{
+			if (botMode[i] == Mode_SimpleKZ)
+			{
+				DHookSetReturn(hReturn, 276.54321);
+				return MRES_Supercede;
+			}
+			else if (botMode[i] == Mode_KZTimer)
+			{
+				DHookSetReturn(hReturn, 276.15);
+				return MRES_Supercede;
+			}
+		}
+	}
+	return MRES_Ignored;
+}
 
 
 // =====[ PRIVATE ]=====
