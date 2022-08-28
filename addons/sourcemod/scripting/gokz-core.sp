@@ -179,6 +179,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 {
 	gI_CmdNum[client] = cmdnum;
 	OnPlayerRunCmd_MapTriggers(client, buttons);
+	OnPlayerRunCmd_Turnbinds(client, buttons, tickcount, angles);
 	return Plugin_Continue;
 }
 
@@ -246,6 +247,12 @@ public Action OnPlayerDeath(Event event, const char[] name, bool dontBroadcast) 
 		OnPlayerDeath_TeamNumber(client);
 	}
 	return Plugin_Continue;
+}
+
+public void OnPlayerJump(Event event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	OnPlayerJump_Triggers(client);
 }
 
 public MRESReturn DHooks_OnTeleport(int client, Handle params)
@@ -475,6 +482,7 @@ static void HookEvents()
 	HookEvent("player_spawn", OnPlayerSpawn, EventHookMode_Post);
 	HookEvent("player_team", OnPlayerJoinTeam, EventHookMode_Pre);
 	HookEvent("player_death", OnPlayerDeath, EventHookMode_Pre);
+	HookEvent("player_jump", OnPlayerJump);
 	HookEvent("round_start", OnRoundStart, EventHookMode_PostNoCopy);
 	AddNormalSoundHook(view_as<NormalSHook>(OnNormalSound));
 	
