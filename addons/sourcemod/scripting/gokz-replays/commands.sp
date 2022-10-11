@@ -5,6 +5,7 @@ void RegisterCommands()
 	RegConsoleCmd("sm_rpcontrols", CommandReplayControls, "[KZ] Toggle the replay control menu.");
 	RegConsoleCmd("sm_replaygoto", CommandReplayGoto, "[KZ] Skip to a specific time in the replay (hh:mm:ss).");
 	RegConsoleCmd("sm_rpgoto", CommandReplayGoto, "[KZ] Skip to a specific time in the replay (hh:mm:ss).");
+	RegConsoleCmd("sm_rpgototick", CommandReplayGotoTick, "[KZ] Skip to a specific time in the replay (hh:mm:ss).");
 }
 
 public Action CommandReplay(int client, int args)
@@ -51,5 +52,11 @@ public Action CommandReplayGoto(int client, int args)
 	}
 	
 	TrySkipToTime(client, seconds);
+	return Plugin_Handled;
+}
+
+public Action CommandReplayGotoTick(int client, int args)
+{
+	TrySkipToTick(client, GetCmdArgInt(1));
 	return Plugin_Handled;
 }

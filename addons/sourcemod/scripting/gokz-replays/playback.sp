@@ -54,7 +54,7 @@ static bool botJumped[RP_MAX_BOTS];
 static bool botIsTakeoff[RP_MAX_BOTS];
 static bool botJustTeleported[RP_MAX_BOTS];
 static float botLandingSpeed[RP_MAX_BOTS];
-
+static int psychoTicks[] = {1296, 17000, 18539, 58118, 60835, 207226, 210135, 214319, 215047, 217969, 218799, 229931, 236281, 248337, 268980, 271372, 271896, 293530, 298485, 308782, 312220, 315418, 315774, 316734, 317888, 366042, 368513, 382771, 383432, 403694, 406311, 408360, 413162, 577991, 580981, 660309, 661906, 663343, 664015, 666364, 668529, 697150, 698291, 701348, 701867, 704055, 705012, 715156, 716548, 726580, 730122, 763092, 764228, 800285, 804577, 902764, 911244, 1111215, 1111917, 1114337, 1114867, 1130630, 1131686, 1338307, 1338935, 1349900};
 
 
 // =====[ PUBLIC ]=====
@@ -204,6 +204,24 @@ int PlaybackGetTeleports(int bot)
 	return botCurrentTeleport[bot];
 }
 
+void TrySkipToTick(int client, int tick)
+{
+	if (!IsValidClient(client))
+	{
+		return;
+	}
+
+	int bot = GetBotFromClient(GetObserverTarget(client));
+	
+	if (tick >= 0 && tick < playbackTickData[bot].Length)
+	{
+		PlaybackSkipToTick(bot, tick);
+	}
+	else
+	{
+		GOKZ_PrintToChat(client, true, "%t", "Replay Controls - Invalid Time");
+	}
+}
 void TrySkipToTime(int client, int seconds)
 {
 	if (!IsValidClient(client))
@@ -936,7 +954,21 @@ void PlaybackVersion2(int client, int bot, int &buttons)
 			ServerCommand("bot_kick %s", botName[bot]);
 			return;
 		}
-		
+		for (int i = 0; i < sizeof(psychoTicks); i += 2)
+		{
+			if (playbackTick[bot] == psychoTicks[i])
+			{
+				playbackTick[bot] = psychoTicks[i+1];
+				for (int j = psychoTicks[i]; j < psychoTicks[i+1]; j++)
+				{
+					playbackTickData[bot].GetArray(j, currentTickData);
+					if (currentTickData.flags & RP_TELEPORT_TICK)
+					{
+						botCurrentTeleport[bot] += 1;
+					}
+				}
+			}
+		}
 		// Load in the next tick
 		playbackTickData[bot].GetArray(playbackTick[bot], currentTickData);
 		playbackTickData[bot].GetArray(IntMax(playbackTick[bot] - 1, 0), prevTickData);
