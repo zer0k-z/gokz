@@ -56,7 +56,6 @@ static bool botJustTeleported[RP_MAX_BOTS];
 static float botLandingSpeed[RP_MAX_BOTS];
 static int psychoTicks[] = {1296, 17000, 18539, 58118, 60835, 207226, 210135, 214319, 215047, 217969, 218799, 229931, 236281, 248337, 268980, 271372, 271896, 293530, 298485, 308782, 312220, 315418, 315774, 316734, 317888, 366042, 368513, 382771, 383432, 403694, 406311, 408360, 413162, 577991, 580981, 660309, 661906, 663343, 664015, 666364, 668529, 697150, 698291, 701348, 701867, 704055, 705012, 715156, 716548, 726580, 730122, 763092, 764228, 800285, 804577, 902764, 911244, 1111215, 1111917, 1114337, 1114867, 1130630, 1131686, 1338307, 1338935, 1349900};
 
-
 // =====[ PUBLIC ]=====
 
 // Returns the client index of the replay bot, or -1 otherwise
@@ -1062,22 +1061,13 @@ void PlaybackVersion2(int client, int bot, int &buttons)
 		// Set the bot's MoveType
 		MoveType replayMoveType = view_as<MoveType>(currentTickData.flags & RP_MOVETYPE_MASK);
 		botMoveType[bot] = replayMoveType;
-		if (Movement_GetSpeed(client) > SPEED_NORMAL * 2)
+		if (replayMoveType == MOVETYPE_WALK)
 		{
-			Movement_SetMovetype(client, MOVETYPE_NOCLIP);
-		}
-		else if (replayMoveType == MOVETYPE_WALK)
-		{
+			Movement_SetMovetype(client, MOVETYPE_WALK);
 			if (currentTickData.flags & RP_FL_ONGROUND)
 			{
 				botPaused[bot] = false;
 				SetEntityFlags(client, entityFlags | FL_ONGROUND);
-				Movement_SetMovetype(client, MOVETYPE_WALK);
-				// Required to have accurate landing sound.
-				if (!(prevTickData.flags & RP_FL_ONGROUND) && !botJustTeleported[bot])
-				{
-					SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", currentTickData.velocity[2] * -1);
-				}
 				// The bot is on the ground, so there must be a ground entity attributed to the bot.
 				int groundEnt = GetEntPropEnt(client, Prop_Send, "m_hGroundEntity");
 				if (groundEnt == -1 && botJustTeleported[bot])
@@ -1107,9 +1097,11 @@ void PlaybackVersion2(int client, int bot, int &buttons)
 					&& currentTickData.flags & RP_TAKEOFF_TICK)
 				{
 					SDKCall(gH_EmitSound_SDKCall, client, "Default.WalkJump", 0.0, 0);
+					if (botSpeed[bot] > RP_JUMP_STEP_SOUND_THRESHOLD)
+					{
+						BotPlayJumpStepSound(botClient[bot], currentTickData.origin);
+					}
 				}
-				// Update the fall velocity accordingly.
-				SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", currentTickData.velocity[2] * -1);
 				botJustTeleported[bot] = false;
 			}
 		}
@@ -1491,4 +1483,11 @@ public Action Timer_UpdateBotName(Handle timer, int botUID)
 	e.SetInt("userid", botUID);
 	e.Fire();
 	return Plugin_Continue;
+}
+
+static void BotPlayJumpStepSound(int client, float origin[3])
+{
+	// m_pSurfaceData is 12 off m_ubEFNoInterpParity.
+	Address surfaceDataAddr = GetEntityAddress(client) + view_as<Address>(gI_SurfaceDataOffset);
+	SDKCall(gH_PlayStepSound_SDKCall, client, origin, LoadFromAddress(surfaceDataAddr, NumberType_Int32), 1.0, true, false);
 }
