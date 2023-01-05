@@ -31,7 +31,7 @@ public Plugin myinfo =
 	author = "DanZay", 
 	description = "Records runs to disk and allows playback using bots", 
 	version = GOKZ_VERSION, 
-	url = "https://bitbucket.org/kztimerglobalteam/gokz"
+	url = GOKZ_SOURCE_URL
 };
 
 #define UPDATER_URL GOKZ_UPDATER_BASE_URL..."gokz-replays.txt"
@@ -42,10 +42,7 @@ int gI_CurrentMapFileSize;
 bool gB_HideNameChange;
 bool gB_NubRecordMissed[MAXPLAYERS + 1];
 ArrayList g_ReplayInfoCache;
-Handle gH_EmitSound_SDKCall;
 DynamicDetour gH_DHooks_TeamFull;
-int gI_SurfaceDataOffset;
-Handle gH_PlayStepSound_SDKCall;
 
 #include "gokz-replays/commands.sp"
 #include "gokz-replays/nav.sp"
@@ -69,6 +66,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
+	LoadTranslations("gokz-common.phrases");
 	LoadTranslations("gokz-replays.phrases");
 	
 	CreateGlobalForwards();
@@ -291,29 +289,6 @@ static void HookEvents()
 {
 	HookUserMessage(GetUserMessageId("SayText2"), Hook_SayText2, true);
 	GameData gameData = LoadGameConfigFile("gokz-replays.games");
-
-	StartPrepSDKCall(SDKCall_Entity);
-	PrepSDKCall_SetFromConf(gameData, SDKConf_Signature, "CBaseEntity::EmitSound");
-	PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
-	PrepSDKCall_AddParameter(SDKType_Float, SDKPass_ByValue);
-	PrepSDKCall_AddParameter(SDKType_Float, SDKPass_Pointer);
-	gH_EmitSound_SDKCall = EndPrepSDKCall();
-	
-	StartPrepSDKCall(SDKCall_Player);
-	PrepSDKCall_SetFromConf(gameData, SDKConf_Virtual, "CCSPlayer::PlayStepSound");
-	PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef);
-	PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
-	PrepSDKCall_AddParameter(SDKType_Float, SDKPass_Plain);
-	PrepSDKCall_AddParameter(SDKType_Bool, SDKPass_Plain);
-	PrepSDKCall_AddParameter(SDKType_Bool, SDKPass_Plain);
-	gH_PlayStepSound_SDKCall = EndPrepSDKCall();
-
-	int offset = gameData.GetOffset("CBasePlayer::m_pSurfaceData");
-	if (offset == -1)
-	{
-		SetFailState("Failed to find CBasePlayer::m_pSurfaceData offset");
-	}
-	gI_SurfaceDataOffset = FindSendPropInfo("CBasePlayer", "m_ubEFNoInterpParity") - offset;
 
 	gH_DHooks_TeamFull = DynamicDetour.FromConf(gameData, "CCSGameRules::TeamFull");
 	if (gH_DHooks_TeamFull == INVALID_HANDLE)

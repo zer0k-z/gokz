@@ -61,6 +61,16 @@ static int psychoTicks[] = {1296, 17000, 18539, 58118, 60835, 207226, 210135, 21
 // Returns the client index of the replay bot, or -1 otherwise
 int LoadReplayBot(int client, char[] path)
 {
+	// Safeguard Check
+	if (GOKZ_GetCoreOption(client, Option_Safeguard) > Safeguard_Disabled && GOKZ_GetTimerRunning(client) && GOKZ_GetValidTimer(client))
+	{
+		if (!GOKZ_GetPaused(client) && !GOKZ_GetCanPause(client))
+		{
+			GOKZ_PrintToChat(client, true, "%t", "Safeguard - Blocked");
+			GOKZ_PlayErrorSound(client);
+			return -1;
+		}
+	}
 	int bot;
 	if (GetBotsInUse() < RP_MAX_BOTS)
 	{
@@ -279,7 +289,8 @@ void OnClientPutInServer_Playback(int client)
 			botInGame[bot] = true;
 			botClient[bot] = client;
 			GetClientName(client, botName[bot], sizeof(botName[]));
-			SetBotStuff(bot);
+			// The bot won't receive its weapons properly if we don't wait a frame
+			RequestFrame(SetBotStuff, bot);
 			if (IsValidClient(botCaller[bot]))
 			{
 				MakePlayerSpectate(botCaller[bot], botClient[bot]);
@@ -1246,11 +1257,11 @@ public void RequestFrame_SetBotStuff(int userid)
 	if (botReplayType[bot] == ReplayType_Run 
 		&& GOKZ_GetTimeTypeEx(botTeleportsUsed[bot]) == TimeType_Pro)
 	{
-		GOKZ_JoinTeam(client, CS_TEAM_CT);
+		GOKZ_JoinTeam(client, CS_TEAM_CT, .forceBroadcast = true);
 	}
 	else
 	{
-		GOKZ_JoinTeam(client, CS_TEAM_T);
+		GOKZ_JoinTeam(client, CS_TEAM_CT, .forceBroadcast = true);
 	}
 	// Set bot weapons
 	// Always start by removing the pistol and knife
