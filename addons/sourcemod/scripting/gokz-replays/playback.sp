@@ -43,6 +43,7 @@ static int timeOnGround[RP_MAX_BOTS];
 static int timeInAir[RP_MAX_BOTS];
 static int botTeleportsUsed[RP_MAX_BOTS];
 static int botCurrentTeleport[RP_MAX_BOTS];
+static int skippedTeleports[RP_MAX_BOTS];
 static int botButtons[RP_MAX_BOTS];
 static MoveType botMoveType[RP_MAX_BOTS];
 static float botTakeoffSpeed[RP_MAX_BOTS];
@@ -50,11 +51,20 @@ static float botSpeed[RP_MAX_BOTS];
 static float botLastOrigin[RP_MAX_BOTS][3];
 static bool hitBhop[RP_MAX_BOTS];
 static bool hitPerf[RP_MAX_BOTS];
+static bool hitJB[RP_MAX_BOTS];
 static bool botJumped[RP_MAX_BOTS];
 static bool botIsTakeoff[RP_MAX_BOTS];
 static bool botJustTeleported[RP_MAX_BOTS];
 static float botLandingSpeed[RP_MAX_BOTS];
-static int psychoTicks[] = {1296, 17000, 18539, 58118, 60835, 207226, 210135, 214319, 215047, 217969, 218799, 229931, 236281, 248337, 268980, 271372, 271896, 293530, 298485, 308782, 312220, 315418, 315774, 316734, 317888, 366042, 368513, 382771, 383432, 403694, 406311, 408360, 413162, 577991, 580981, 660309, 661906, 663343, 664015, 666364, 668529, 697150, 698291, 701348, 701867, 704055, 705012, 715156, 716548, 726580, 730122, 763092, 764228, 800285, 804577, 902764, 911244, 1111215, 1111917, 1114337, 1114867, 1130630, 1131686, 1338307, 1338935, 1349900};
+// static int psychoTicks[] = {5418, 5780, 6035, 7300, 7716, 8060, 9475, 10299, 12913, 13120, 15030, 15615, 16876, 17050, 18182, 18372, 18570, 18759, 21700, 22451, 22867, 23047, 23547, 24020, 24693, 26120, 26939, 27649, 30511, 34160, 35027, 35929, 37730, 38381, 41230, 41500, 46301, 47180, 47500, 48956,  50677, 51507, 56432, 56650, 57803, 58396, 58763, 59862, 62800, 63873, 64882, 72605, 74746, 75629, 78319, 81707, 82399, 83012, 87743, 91120, 95447, 96755, 97980, 98740, 99355, 101577, 102395, 103105, 105360, 106832, 107539, 108315, 108690, 109322, 110265, 119039, 120543, 121069, 121750 ,125056, 126005, 126977, 128605, 138805, 139132, 139380, 139826, 140482, 140970, 142405, 143051, 144630, 146880, 147149, 147661, 148678, 148920, 149220, 149545, 150515, 152725, 153034, 154685, 155130, 156340, 158590, 160095, 166158, 166512, 166875, 167415, 167850, 169790, 171600, 173589, 174980, 176412, 181866, 183749, 184280, 186182, 193084, 194525, 195043, 195407, 196461, 197030, 198381, 202765, 203538, 205320, 206765, 207018, 207490, 207746, 208162, 208915, 215065, 216450, 216626, 217312, 218313, 220049, 221144, 221512, 222284, 222870, 223624, 224546, 226197, 226536, 227823, 228290, 229398, 234285, 235020, 235505, 235900, 239700, 242158, 243198, 244210, 255170, 255427};
+
+static int psychoTicks[] = {4970, 5500, 6798, 7148, 8755, 138525, 144880, 149046, 149787, 201732, 204336, 724691, 732262, 816781};static int skippedTicks[RP_MAX_BOTS];
+#define SKIP_SHOW_DURATION 320
+static int timeSinceSkip[RP_MAX_BOTS];
+#define VM_PAUSE_DURATION 256
+static bool crouchJump[RP_MAX_BOTS];
+static char wtPath[PLATFORM_MAX_PATH];
+static File wtFile;
 
 // =====[ PUBLIC ]=====
 
@@ -96,7 +106,6 @@ int LoadReplayBot(int client, char[] path)
 		GOKZ_PlayErrorSound(client);
 		return -1;
 	}
-	
 	ServerCommand("bot_add");
 	botCaller[bot] = client;
 	return botClient[bot];
@@ -153,6 +162,7 @@ void GetPlaybackState(int client, HUDInfo info)
 	info.TakeoffSpeed = botTakeoffSpeed[bot];
 	info.IsTakeoff = botIsTakeoff[bot] && !Movement_GetOnGround(client);
 	info.CurrentTeleport = botCurrentTeleport[bot];
+	info.HitJB = hitJB[bot];
 }
 
 int GetBotFromClient(int client)
@@ -270,6 +280,10 @@ float GetPlaybackTime(int bot)
 	return 0.0;
 }
 
+int GetPlaybackTick(int bot)
+{
+	return playbackTick[bot];
+}
 
 
 // =====[ EVENTS ]=====
@@ -386,6 +400,8 @@ static bool LoadPlayback(int client, int bot, char[] path)
 	}
 
 	File file = OpenFile(path, "rb");
+	FormatEx(wtPath, PLATFORM_MAX_PATH, "data.csv");
+	wtFile = OpenFile(wtPath, "wt");
 	
 	// Check magic number in header
 	int magicNumber;
@@ -923,7 +939,6 @@ void PlaybackVersion2(int client, int bot, int &buttons, float vel[3], float ang
 	int size = playbackTickData[bot].Length;
 	ReplayTickData prevTickData;
 	ReplayTickData currentTickData;
-	
 	// If first or last frame of the playback
 	if (playbackTick[bot] == 0 || playbackTick[bot] == (size - 1))
 	{
@@ -959,6 +974,7 @@ void PlaybackVersion2(int client, int bot, int &buttons, float vel[3], float ang
 				botDataLoaded[bot] = false;
 				CancelReplayControlsForBot(bot);
 				ServerCommand("bot_kick %s", botName[bot]);
+				delete wtFile;
 			}
 		}
 	}
@@ -981,21 +997,56 @@ void PlaybackVersion2(int client, int bot, int &buttons, float vel[3], float ang
 			ServerCommand("bot_kick %s", botName[bot]);
 			return;
 		}
+		timeSinceSkip[bot] = IntMax(0, timeSinceSkip[bot] - 1);
 		for (int i = 0; i < sizeof(psychoTicks); i += 2)
 		{
 			if (playbackTick[bot] == psychoTicks[i])
 			{
-				playbackTick[bot] = psychoTicks[i+1];
-				for (int j = psychoTicks[i]; j < psychoTicks[i+1]; j++)
+				skippedTeleports[bot] = 0;
+				PlaybackSkipToTick(bot, psychoTicks[i+1]);
+				skippedTicks[bot] = psychoTicks[i+1] - psychoTicks[i];
+				timeSinceSkip[bot] = 384;
+			}
+		}
+		// Look ahead for angle changes
+		#define ANGLE_THRESHOLD_X 10.0
+		#define ANGLE_THRESHOLD_Y 16.0
+		bool teleportAhead;
+		for (int i = 0; i < VM_PAUSE_DURATION; i++)
+		{
+			ReplayTickData futureTickData, prevFutureTickData;
+			playbackTickData[bot].GetArray(IntMin(playbackTick[bot] + i, playbackTickData[bot].Length - 1), futureTickData);
+			playbackTickData[bot].GetArray(IntMax(IntMin(playbackTick[bot] + i, playbackTickData[bot].Length - 1) - 1, 0), prevFutureTickData);
+			if (FloatAbs(futureTickData.angles[0] - prevFutureTickData.angles[0]) > ANGLE_THRESHOLD_X || 
+				FloatMin(FloatAbs(futureTickData.angles[1] - prevFutureTickData.angles[1]), FloatAbs(prevFutureTickData.angles[1] + futureTickData.angles[1])) > ANGLE_THRESHOLD_Y)
+			{
+				teleportAhead = true;
+				break;
+			}
+		}
+		if (!teleportAhead)
+		{
+			for (int i = 0; i < sizeof(psychoTicks); i += 2)
+			{
+				if (playbackTick[bot] > psychoTicks[i] - VM_PAUSE_DURATION && playbackTick[bot] < psychoTicks[i])
 				{
-					playbackTickData[bot].GetArray(j, currentTickData);
-					if (currentTickData.flags & RP_TELEPORT_TICK)
-					{
-						botCurrentTeleport[bot] += 1;
-					}
+					teleportAhead = true;
+					break;
 				}
 			}
 		}
+		float newValue = gCV_SwayScale.FloatValue;
+		if (teleportAhead)
+		{
+			newValue -= 1.6 / VM_PAUSE_DURATION;
+		}
+		else
+		{
+			newValue += 1.6 / VM_PAUSE_DURATION;
+		}
+		newValue = FloatClamp(newValue, 0.0, 1.6);
+		// if (gCV_SwayScale.FloatValue != newValue) gCV_SwayScale.FloatValue = newValue;
+		
 		// Load in the next tick
 		playbackTickData[bot].GetArray(playbackTick[bot], currentTickData);
 		playbackTickData[bot].GetArray(IntMax(playbackTick[bot] - 1, 0), prevTickData);
@@ -1100,6 +1151,7 @@ void PlaybackVersion2(int client, int bot, int &buttons, float vel[3], float ang
 		}
 		else if (replayMoveType == MOVETYPE_LADDER)
 		{
+			crouchJump[bot] = false;
 			botPaused[bot] = false;
 			Movement_SetMovetype(client, MOVETYPE_LADDER);
 		}
@@ -1112,6 +1164,15 @@ void PlaybackVersion2(int client, int bot, int &buttons, float vel[3], float ang
 		{
 			botJustTeleported[bot] = true;
 			botCurrentTeleport[bot]++;
+			// for (int i = 0; i < sizeof psychoTPs; i++)
+			// {
+			// 	if (botCurrentTeleport[bot] == psychoTPs[i])
+			// 	{
+			// 		wtFile.WriteLine("%i", playbackTick[bot]);
+			// 		PrintToServer("%i %i", botCurrentTeleport[bot], psychoTPs[i]);
+			// 		break;
+			// 	}
+			// }
 		}
 
 		if (currentTickData.flags & RP_TAKEOFF_TICK)
@@ -1119,63 +1180,64 @@ void PlaybackVersion2(int client, int bot, int &buttons, float vel[3], float ang
 			hitPerf[bot] = currentTickData.flags & RP_HIT_PERF > 0;
 			botIsTakeoff[bot] = true;
 			botTakeoffSpeed[bot] = GetVectorHorizontalLength(currentTickData.velocity);
+			crouchJump[bot] = (currentTickData.flags & RP_IN_JUMP > 0 && (currentTickData.flags & RP_IN_DUCK > 0 || currentTickData.flags & RP_FL_DUCKING > 0));
 		}
 
-		if ((currentTickData.flags & RP_SECONDARY_EQUIPPED) && !IsCurrentWeaponSecondary(client))
-		{
-			int item = GetPlayerWeaponSlot(client, CS_SLOT_SECONDARY);
-			if (item != -1)
-			{
-				char name[64];
-				GetEntityClassname(item, name, sizeof(name));
-				FakeClientCommand(client, "use %s", name);
-			}
-		}
-		else if (!(currentTickData.flags & RP_SECONDARY_EQUIPPED) && IsCurrentWeaponSecondary(client))
-		{
-			int item = GetPlayerWeaponSlot(client, CS_SLOT_KNIFE);
-			if (item != -1)
-			{
-				char name[64];
-				GetEntityClassname(item, name, sizeof(name));
-				FakeClientCommand(client, "use %s", name);
-			}
-		}
-
+		// if ((currentTickData.flags & RP_SECONDARY_EQUIPPED) && !IsCurrentWeaponSecondary(client))
+		// {
+		// 	int item = GetPlayerWeaponSlot(client, CS_SLOT_SECONDARY);
+		// 	if (item != -1)
+		// 	{
+		// 		char name[64];
+		// 		GetEntityClassname(item, name, sizeof(name));
+		// 		FakeClientCommand(client, "use %s", name);
+		// 	}
+		// }
+		// else if (!(currentTickData.flags & RP_SECONDARY_EQUIPPED) && IsCurrentWeaponSecondary(client))
+		// {
+		// 	int item = GetPlayerWeaponSlot(client, CS_SLOT_KNIFE);
+		// 	if (item != -1)
+		// 	{
+		// 		char name[64];
+		// 		GetEntityClassname(item, name, sizeof(name));
+		// 		FakeClientCommand(client, "use %s", name);
+		// 	}
+		// }
+		
 		#if defined DEBUG
 		if(!botPlaybackPaused[bot])
 		{
-			PrintToServer("Tick: %d", playbackTick[bot]);
-			PrintToServer("X %f \nY %f \nZ %f\nPitch %f\nYaw %f", currentTickData.origin[0], currentTickData.origin[1], currentTickData.origin[2], currentTickData.angles[0], currentTickData.angles[1]);
-			if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_WALK)) PrintToServer("MOVETYPE_WALK");
-			if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_LADDER)) PrintToServer("MOVETYPE_LADDER");
-			if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_NOCLIP)) PrintToServer("MOVETYPE_NOCLIP");
-			if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_NOCLIP)) PrintToServer("MOVETYPE_NONE");
+			// PrintToServer("Tick: %d", playbackTick[bot]);
+			// PrintToServer("X %f \nY %f \nZ %f\nPitch %f\nYaw %f", currentTickData.origin[0], currentTickData.origin[1], currentTickData.origin[2], currentTickData.angles[0], currentTickData.angles[1]);
+			// if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_WALK)) PrintToServer("MOVETYPE_WALK");
+			// if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_LADDER)) PrintToServer("MOVETYPE_LADDER");
+			// if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_NOCLIP)) PrintToServer("MOVETYPE_NOCLIP");
+			// if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_NOCLIP)) PrintToServer("MOVETYPE_NONE");
 
-			if(currentTickData.flags & RP_IN_ATTACK) PrintToServer("IN_ATTACK");
-			if(currentTickData.flags & RP_IN_ATTACK2) PrintToServer("IN_ATTACK2");
-			if(currentTickData.flags & RP_IN_JUMP) PrintToServer("IN_JUMP");
-			if(currentTickData.flags & RP_IN_DUCK) PrintToServer("IN_DUCK");
-			if(currentTickData.flags & RP_IN_FORWARD) PrintToServer("IN_FORWARD");
-			if(currentTickData.flags & RP_IN_BACK) PrintToServer("IN_BACK");
-			if(currentTickData.flags & RP_IN_LEFT) PrintToServer("IN_LEFT");
-			if(currentTickData.flags & RP_IN_RIGHT) PrintToServer("IN_RIGHT");
-			if(currentTickData.flags & RP_IN_MOVELEFT) PrintToServer("IN_MOVELEFT");
-			if(currentTickData.flags & RP_IN_MOVERIGHT) PrintToServer("IN_MOVERIGHT");
-			if(currentTickData.flags & RP_IN_RELOAD) PrintToServer("IN_RELOAD");
-			if(currentTickData.flags & RP_IN_SPEED) PrintToServer("IN_SPEED");
-			if(currentTickData.flags & RP_IN_USE) PrintToServer("IN_USE");
-			if(currentTickData.flags & RP_IN_BULLRUSH) PrintToServer("IN_BULLRUSH");
+			// if(currentTickData.flags & RP_IN_ATTACK) PrintToServer("IN_ATTACK");
+			// if(currentTickData.flags & RP_IN_ATTACK2) PrintToServer("IN_ATTACK2");
+			// if(currentTickData.flags & RP_IN_JUMP) PrintToServer("IN_JUMP");
+			// if(currentTickData.flags & RP_IN_DUCK) PrintToServer("IN_DUCK");
+			// if(currentTickData.flags & RP_IN_FORWARD) PrintToServer("IN_FORWARD");
+			// if(currentTickData.flags & RP_IN_BACK) PrintToServer("IN_BACK");
+			// if(currentTickData.flags & RP_IN_LEFT) PrintToServer("IN_LEFT");
+			// if(currentTickData.flags & RP_IN_RIGHT) PrintToServer("IN_RIGHT");
+			// if(currentTickData.flags & RP_IN_MOVELEFT) PrintToServer("IN_MOVELEFT");
+			// if(currentTickData.flags & RP_IN_MOVERIGHT) PrintToServer("IN_MOVERIGHT");
+			// if(currentTickData.flags & RP_IN_RELOAD) PrintToServer("IN_RELOAD");
+			// if(currentTickData.flags & RP_IN_SPEED) PrintToServer("IN_SPEED");
+			// if(currentTickData.flags & RP_IN_USE) PrintToServer("IN_USE");
+			// if(currentTickData.flags & RP_IN_BULLRUSH) PrintToServer("IN_BULLRUSH");
 
-			if(currentTickData.flags & RP_FL_ONGROUND) PrintToServer("FL_ONGROUND");
-			if(currentTickData.flags & RP_FL_DUCKING ) PrintToServer("FL_DUCKING");
-			if(currentTickData.flags & RP_FL_SWIM) PrintToServer("FL_SWIM");
-			if(currentTickData.flags & RP_UNDER_WATER) PrintToServer("WATERLEVEL!=0");
-			if(currentTickData.flags & RP_TELEPORT_TICK) PrintToServer("TELEPORT");
-			if(currentTickData.flags & RP_TAKEOFF_TICK) PrintToServer("TAKEOFF");
-			if(currentTickData.flags & RP_HIT_PERF) PrintToServer("PERF");
-			if(currentTickData.flags & RP_SECONDARY_EQUIPPED) PrintToServer("SECONDARY_WEAPON_EQUIPPED");
-			PrintToServer("==============================================================");
+			// if(currentTickData.flags & RP_FL_ONGROUND) PrintToServer("FL_ONGROUND");
+			// if(currentTickData.flags & RP_FL_DUCKING ) PrintToServer("FL_DUCKING");
+			// if(currentTickData.flags & RP_FL_SWIM) PrintToServer("FL_SWIM");
+			// if(currentTickData.flags & RP_UNDER_WATER) PrintToServer("WATERLEVEL!=0");
+			// if(currentTickData.flags & RP_TELEPORT_TICK) PrintToServer("TELEPORT");
+			// if(currentTickData.flags & RP_TAKEOFF_TICK) PrintToServer("TAKEOFF");
+			// if(currentTickData.flags & RP_HIT_PERF) PrintToServer("PERF");
+			// if(currentTickData.flags & RP_SECONDARY_EQUIPPED) PrintToServer("SECONDARY_WEAPON_EQUIPPED");
+			// PrintToServer("==============================================================");
 		}
 		#endif
 	}
@@ -1246,8 +1308,48 @@ void PlaybackVersion2Post(int client, int bot)
 			SetEntityFlags(client, entityFlags | FL_INWATER);
 		}
 
+		MoveType oldMoveType = view_as<MoveType>(prevTickData.flags & RP_MOVETYPE_MASK);
+		if (currentTickData.flags & RP_HIT_PERF && currentTickData.flags & RP_TAKEOFF_TICK && botMoveType[bot] == MOVETYPE_WALK && oldMoveType == MOVETYPE_WALK)
+		{
+			hitJB[bot] = Movement_GetJumpbugged(client) || (prevTickData.flags & RP_FL_DUCKING 
+				&& !(prevTickData.flags & RP_FL_ONGROUND) 
+				&& !(currentTickData.flags & RP_FL_DUCKING)
+				&& !(currentTickData.flags & RP_FL_ONGROUND));
+		}
+		if (hitJB[bot] && (currentTickData.flags & RP_FL_ONGROUND || botMoveType[bot] != MOVETYPE_WALK))
+		{
+			hitJB[bot] = false;
+		}
 		botSpeed[bot] = GetVectorHorizontalLength(currentTickData.velocity);
 		playbackTick[bot]++;
+
+		// // Pause check
+		// if (currentTickData.flags & RP_TAKEOFF_TICK && prevTickData.flags & RP_FL_ONGROUND)
+		// {
+		// 	botPlaybackPaused[bot] = true;
+		// }
+		
+		bool hidePrespeed = (botMoveType[bot] == MOVETYPE_LADDER) || ((currentTickData.flags & RP_FL_ONGROUND) && !(currentTickData.flags & RP_TAKEOFF_TICK));
+		int csvSpeed = (RoundToNearest(botSpeed[bot]) - botSpeed[bot] < 0.005) ? RoundToNearest(botSpeed[bot]) : RoundToFloor(botSpeed[bot]);
+		char skippedTime[64];
+		Format(skippedTime, sizeof(skippedTime), "(+%s)", GOKZ_FormatTime(float(skippedTicks[bot])/128));
+		
+		if (hidePrespeed)
+		{
+			wtFile.WriteLine("%i,%i, ,0,%s,%s,%f,%i", botCurrentTeleport[bot], csvSpeed, GOKZ_FormatTime(GetPlaybackTime(bot)), skippedTime, float(timeSinceSkip[bot])/SKIP_SHOW_DURATION, skippedTeleports[bot]);
+			
+		}
+		else
+		{
+			int csvTakeoffSpeed = (RoundToNearest(botTakeoffSpeed[bot]) - botTakeoffSpeed[bot] < 0.005) ? RoundToNearest(botTakeoffSpeed[bot]) : RoundToFloor(botTakeoffSpeed[bot]);
+			char crouchJumpText[4];
+			if (crouchJump[bot]) 
+			{
+				FormatEx(crouchJumpText, sizeof(crouchJumpText), " C");
+			}
+			wtFile.WriteLine("%i,%i,%i%s,%i,%s,%s,%f,%i", botCurrentTeleport[bot], csvSpeed, IntMin(hitPerf[bot] || hitJB[bot] ? 380 : 276, csvTakeoffSpeed), crouchJumpText, hitJB[bot] || hitPerf[bot] ? 1 : 0, GOKZ_FormatTime(GetPlaybackTime(bot)), skippedTime, float(timeSinceSkip[bot])/SKIP_SHOW_DURATION, skippedTeleports[bot]);
+			
+		}
 	}
 }
 
@@ -1472,38 +1574,39 @@ static void PlaybackSkipToTick(int bot, int tick)
 			if (currentTickData.flags & RP_TELEPORT_TICK)
 			{
 				botCurrentTeleport[bot] += direction;
+				skippedTeleports[bot] += direction;
 			}
 		}
 
-		#if defined DEBUG 
-			PrintToServer("X %f \nY %f \nZ %f\nPitch %f\nYaw %f", currentTickData.origin[0], currentTickData.origin[1], currentTickData.origin[2], currentTickData.angles[0], currentTickData.angles[1]);
-			if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_WALK)) PrintToServer("MOVETYPE_WALK");
-			if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_LADDER)) PrintToServer("MOVETYPE_LADDER");
-			if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_NOCLIP)) PrintToServer("MOVETYPE_NOCLIP");
-			if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_NONE)) PrintToServer("MOVETYPE_NONE");
+		// #if defined DEBUG 
+		// 	PrintToServer("X %f \nY %f \nZ %f\nPitch %f\nYaw %f", currentTickData.origin[0], currentTickData.origin[1], currentTickData.origin[2], currentTickData.angles[0], currentTickData.angles[1]);
+		// 	if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_WALK)) PrintToServer("MOVETYPE_WALK");
+		// 	if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_LADDER)) PrintToServer("MOVETYPE_LADDER");
+		// 	if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_NOCLIP)) PrintToServer("MOVETYPE_NOCLIP");
+		// 	if(currentTickData.flags & RP_MOVETYPE_MASK == view_as<int>(MOVETYPE_NONE)) PrintToServer("MOVETYPE_NONE");
 
-			if(currentTickData.flags & RP_IN_ATTACK) PrintToServer("IN_ATTACK");
-			if(currentTickData.flags & RP_IN_ATTACK2) PrintToServer("IN_ATTACK2");
-			if(currentTickData.flags & RP_IN_JUMP) PrintToServer("IN_JUMP");
-			if(currentTickData.flags & RP_IN_DUCK) PrintToServer("IN_DUCK");
-			if(currentTickData.flags & RP_IN_FORWARD) PrintToServer("IN_FORWARD");
-			if(currentTickData.flags & RP_IN_BACK) PrintToServer("IN_BACK");
-			if(currentTickData.flags & RP_IN_LEFT) PrintToServer("IN_LEFT");
-			if(currentTickData.flags & RP_IN_RIGHT) PrintToServer("IN_RIGHT");
-			if(currentTickData.flags & RP_IN_MOVELEFT) PrintToServer("IN_MOVELEFT");
-			if(currentTickData.flags & RP_IN_MOVERIGHT) PrintToServer("IN_MOVERIGHT");
-			if(currentTickData.flags & RP_IN_RELOAD) PrintToServer("IN_RELOAD");
-			if(currentTickData.flags & RP_IN_SPEED) PrintToServer("IN_SPEED");
-			if(currentTickData.flags & RP_FL_ONGROUND) PrintToServer("FL_ONGROUND");
-			if(currentTickData.flags & RP_FL_DUCKING ) PrintToServer("FL_DUCKING");
-			if(currentTickData.flags & RP_FL_SWIM) PrintToServer("FL_SWIM");
-			if(currentTickData.flags & RP_UNDER_WATER) PrintToServer("WATERLEVEL!=0");
-			if(currentTickData.flags & RP_TELEPORT_TICK) PrintToServer("TELEPORT");
-			if(currentTickData.flags & RP_TAKEOFF_TICK) PrintToServer("TAKEOFF");
-			if(currentTickData.flags & RP_HIT_PERF) PrintToServer("PERF");
-			if(currentTickData.flags & RP_SECONDARY_EQUIPPED) PrintToServer("SECONDARY_WEAPON_EQUIPPED");
-			PrintToServer("==============================================================");
-		#endif
+		// 	if(currentTickData.flags & RP_IN_ATTACK) PrintToServer("IN_ATTACK");
+		// 	if(currentTickData.flags & RP_IN_ATTACK2) PrintToServer("IN_ATTACK2");
+		// 	if(currentTickData.flags & RP_IN_JUMP) PrintToServer("IN_JUMP");
+		// 	if(currentTickData.flags & RP_IN_DUCK) PrintToServer("IN_DUCK");
+		// 	if(currentTickData.flags & RP_IN_FORWARD) PrintToServer("IN_FORWARD");
+		// 	if(currentTickData.flags & RP_IN_BACK) PrintToServer("IN_BACK");
+		// 	if(currentTickData.flags & RP_IN_LEFT) PrintToServer("IN_LEFT");
+		// 	if(currentTickData.flags & RP_IN_RIGHT) PrintToServer("IN_RIGHT");
+		// 	if(currentTickData.flags & RP_IN_MOVELEFT) PrintToServer("IN_MOVELEFT");
+		// 	if(currentTickData.flags & RP_IN_MOVERIGHT) PrintToServer("IN_MOVERIGHT");
+		// 	if(currentTickData.flags & RP_IN_RELOAD) PrintToServer("IN_RELOAD");
+		// 	if(currentTickData.flags & RP_IN_SPEED) PrintToServer("IN_SPEED");
+		// 	if(currentTickData.flags & RP_FL_ONGROUND) PrintToServer("FL_ONGROUND");
+		// 	if(currentTickData.flags & RP_FL_DUCKING ) PrintToServer("FL_DUCKING");
+		// 	if(currentTickData.flags & RP_FL_SWIM) PrintToServer("FL_SWIM");
+		// 	if(currentTickData.flags & RP_UNDER_WATER) PrintToServer("WATERLEVEL!=0");
+		// 	if(currentTickData.flags & RP_TELEPORT_TICK) PrintToServer("TELEPORT");
+		// 	if(currentTickData.flags & RP_TAKEOFF_TICK) PrintToServer("TAKEOFF");
+		// 	if(currentTickData.flags & RP_HIT_PERF) PrintToServer("PERF");
+		// 	if(currentTickData.flags & RP_SECONDARY_EQUIPPED) PrintToServer("SECONDARY_WEAPON_EQUIPPED");
+		// 	PrintToServer("==============================================================");
+		// #endif
 	}
 
 	Movement_SetMovetype(botClient[bot], MOVETYPE_NOCLIP);

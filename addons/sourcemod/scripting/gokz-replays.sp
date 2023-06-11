@@ -46,7 +46,7 @@ ArrayList g_ReplayInfoCache;
 Address gA_BotDuckAddr;
 int gI_BotDuckPatchRestore[24]; // Size of patched section in gamedata
 int gI_BotDuckPatchLength;
-
+ConVar gCV_SwayScale;
 DynamicDetour gH_DHooks_TeamFull;
 
 #include "gokz-replays/commands.sp"
@@ -73,7 +73,7 @@ public void OnPluginStart()
 {
 	LoadTranslations("gokz-common.phrases");
 	LoadTranslations("gokz-replays.phrases");
-	
+	gCV_SwayScale = CreateConVar("cl_wpn_sway_scale", "1.6", "", FCVAR_CHEAT | FCVAR_CLIENTCMD_CAN_EXECUTE | FCVAR_SERVER_CAN_EXECUTE | FCVAR_REPLICATED | FCVAR_CLIENTDLL );
 	CreateGlobalForwards();
 	HookEvents();
 	RegisterCommands();
@@ -167,10 +167,10 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 public Action HookTriggers(int entity, int other)
 {
-	if (other >= 1 && other <= MaxClients && IsFakeClient(other))
-	{
-		return Plugin_Handled;
-	}
+	// if (other >= 1 && other <= MaxClients && IsFakeClient(other))
+	// {
+	// 	return Plugin_Handled;
+	// }
 	
 	return Plugin_Continue;
 }

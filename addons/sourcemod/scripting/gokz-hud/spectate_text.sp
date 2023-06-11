@@ -48,6 +48,8 @@ char[] FormatSpectatorTextForMenu(KZPlayer player, HUDInfo info)
 			FormatEx(spectatorTextString, sizeof(spectatorTextString), "");
 		}
 	}
+	TrimString(spectatorTextString);
+	StrCat(spectatorTextString, sizeof(spectatorTextString), "\n");
 	return spectatorTextString;
 }
 

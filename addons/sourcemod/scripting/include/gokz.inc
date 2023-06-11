@@ -61,7 +61,7 @@ stock char[] GOKZ_FormatTime(float time, bool precise = true)
 {
 	char formattedTime[12];
 
-	int roundedTime = RoundFloat(time * 100); // Time rounded to number of centiseconds
+	int roundedTime = RoundToFloor(time * 100); // Time rounded to number of centiseconds
 
 	int centiseconds = roundedTime % 100;
 	roundedTime = (roundedTime - centiseconds) / 100;
@@ -438,6 +438,7 @@ stock void TeleportPlayer(int client, const float origin[3], const float angles[
 	AcceptEntityInput(client, "ClearParent");
 
 	Movement_SetOrigin(client, origin);
+	PrintToServer("%f", origin[2]);
 	Movement_SetVelocity(client, view_as<float>( { 0.0, 0.0, 0.0 } ));
 	Movement_SetBaseVelocity(client, view_as<float>( { 0.0, 0.0, 0.0 } ));
 	if (setAngles)
@@ -510,6 +511,7 @@ public void ContinueHoldStill(DataPack data)
 			Movement_SetMovetype(client, MOVETYPE_LADDER);
 		}
 
+
 		// Prevent noclip exploit
 		SetEntProp(client, Prop_Send, "m_CollisionGroup", GOKZ_COLLISION_GROUP_STANDARD);
 
@@ -519,16 +521,16 @@ public void ContinueHoldStill(DataPack data)
 		{
 			ForcePlayerDuck(client);
 
-			if (ticks < tickCount - 1)
-			{
-				// Don't trigger triggers
-				SetEntProp(client, Prop_Send, "m_CollisionGroup", GOKZ_COLLISION_GROUP_NOTRIGGER);
-			}
-			else
-			{
-				// Let the player trigger triggers on the last tick
-				SetEntProp(client, Prop_Send, "m_CollisionGroup", GOKZ_COLLISION_GROUP_STANDARD);
-			}
+			// if (ticks < tickCount - 1)
+			// {
+			// 	// Don't trigger triggers
+			// 	SetEntProp(client, Prop_Send, "m_CollisionGroup", GOKZ_COLLISION_GROUP_NOTRIGGER);
+			// }
+			// else
+			// {
+			// 	// Let the player trigger triggers on the last tick
+			// 	SetEntProp(client, Prop_Send, "m_CollisionGroup", GOKZ_COLLISION_GROUP_STANDARD);
+			// }
 		}
 
 		++ticks;
@@ -550,7 +552,7 @@ stock void ForcePlayerDuck(int client)
 {
 	// these are both necessary, because on their own the player will sometimes still be in a state that isn't fully ducked.
 	SetEntPropFloat(client, Prop_Send, "m_flDuckAmount", 1.0, 0);
-	SetEntProp(client, Prop_Send, "m_bDucking", true);
+	SetEntProp(client, Prop_Send, "m_bDucked", true);
 }
 
 /**

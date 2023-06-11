@@ -84,8 +84,7 @@ void ShowReplayControlMenu(int client, int bot)
 		}
 		if (GOKZ_HUD_GetOption(client, HUDOption_TimerText) == TimerText_TPMenu)
 		{
-			Format(text, sizeof(text), "%s\n%T - %s", text, "Replay Controls - Title", client,
-				GOKZ_FormatTime(GetPlaybackTime(bot), GOKZ_HUD_GetOption(client, HUDOption_TimerStyle) == TimerStyle_Precise));
+			Format(text, sizeof(text), "%s\n%T - %i", text, "Replay Controls - Title", client, GetPlaybackTick(bot));
 		}
 		else
 		{
