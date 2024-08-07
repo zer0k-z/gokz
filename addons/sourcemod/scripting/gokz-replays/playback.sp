@@ -58,7 +58,8 @@ static bool botJustTeleported[RP_MAX_BOTS];
 static float botLandingSpeed[RP_MAX_BOTS];
 // static int psychoTicks[] = {5418, 5780, 6035, 7300, 7716, 8060, 9475, 10299, 12913, 13120, 15030, 15615, 16876, 17050, 18182, 18372, 18570, 18759, 21700, 22451, 22867, 23047, 23547, 24020, 24693, 26120, 26939, 27649, 30511, 34160, 35027, 35929, 37730, 38381, 41230, 41500, 46301, 47180, 47500, 48956,  50677, 51507, 56432, 56650, 57803, 58396, 58763, 59862, 62800, 63873, 64882, 72605, 74746, 75629, 78319, 81707, 82399, 83012, 87743, 91120, 95447, 96755, 97980, 98740, 99355, 101577, 102395, 103105, 105360, 106832, 107539, 108315, 108690, 109322, 110265, 119039, 120543, 121069, 121750 ,125056, 126005, 126977, 128605, 138805, 139132, 139380, 139826, 140482, 140970, 142405, 143051, 144630, 146880, 147149, 147661, 148678, 148920, 149220, 149545, 150515, 152725, 153034, 154685, 155130, 156340, 158590, 160095, 166158, 166512, 166875, 167415, 167850, 169790, 171600, 173589, 174980, 176412, 181866, 183749, 184280, 186182, 193084, 194525, 195043, 195407, 196461, 197030, 198381, 202765, 203538, 205320, 206765, 207018, 207490, 207746, 208162, 208915, 215065, 216450, 216626, 217312, 218313, 220049, 221144, 221512, 222284, 222870, 223624, 224546, 226197, 226536, 227823, 228290, 229398, 234285, 235020, 235505, 235900, 239700, 242158, 243198, 244210, 255170, 255427};
 
-static int psychoTicks[] = {4970, 5500, 6798, 7148, 8755, 138525, 144880, 149046, 149787, 201732, 204336, 724691, 732262, 816781};static int skippedTicks[RP_MAX_BOTS];
+static int psychoTicks[] = {0,0};
+static int skippedTicks[RP_MAX_BOTS];
 #define SKIP_SHOW_DURATION 320
 static int timeSinceSkip[RP_MAX_BOTS];
 #define VM_PAUSE_DURATION 256
@@ -1183,26 +1184,26 @@ void PlaybackVersion2(int client, int bot, int &buttons, float vel[3], float ang
 			crouchJump[bot] = (currentTickData.flags & RP_IN_JUMP > 0 && (currentTickData.flags & RP_IN_DUCK > 0 || currentTickData.flags & RP_FL_DUCKING > 0));
 		}
 
-		// if ((currentTickData.flags & RP_SECONDARY_EQUIPPED) && !IsCurrentWeaponSecondary(client))
-		// {
-		// 	int item = GetPlayerWeaponSlot(client, CS_SLOT_SECONDARY);
-		// 	if (item != -1)
-		// 	{
-		// 		char name[64];
-		// 		GetEntityClassname(item, name, sizeof(name));
-		// 		FakeClientCommand(client, "use %s", name);
-		// 	}
-		// }
-		// else if (!(currentTickData.flags & RP_SECONDARY_EQUIPPED) && IsCurrentWeaponSecondary(client))
-		// {
-		// 	int item = GetPlayerWeaponSlot(client, CS_SLOT_KNIFE);
-		// 	if (item != -1)
-		// 	{
-		// 		char name[64];
-		// 		GetEntityClassname(item, name, sizeof(name));
-		// 		FakeClientCommand(client, "use %s", name);
-		// 	}
-		// }
+		if ((currentTickData.flags & RP_SECONDARY_EQUIPPED) && !IsCurrentWeaponSecondary(client))
+		{
+			int item = GetPlayerWeaponSlot(client, CS_SLOT_SECONDARY);
+			if (item != -1)
+			{
+				char name[64];
+				GetEntityClassname(item, name, sizeof(name));
+				FakeClientCommand(client, "use %s", name);
+			}
+		}
+		else if (!(currentTickData.flags & RP_SECONDARY_EQUIPPED) && IsCurrentWeaponSecondary(client))
+		{
+			int item = GetPlayerWeaponSlot(client, CS_SLOT_KNIFE);
+			if (item != -1)
+			{
+				char name[64];
+				GetEntityClassname(item, name, sizeof(name));
+				FakeClientCommand(client, "use %s", name);
+			}
+		}
 		
 		#if defined DEBUG
 		if(!botPlaybackPaused[bot])
