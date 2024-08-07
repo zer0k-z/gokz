@@ -164,13 +164,13 @@ int MenuHandler_ReplayControls(Menu menu, MenuAction action, int param1, int par
 		{
 			if (!IsValidClient(param1))
 			{
-				return;
+				return 0;
 			}
 
 			int bot = GetBotFromClient(GetObserverTarget(param1));
 			if (bot == -1 || controllingPlayer[bot] != param1)
 			{
-				return;
+				return 0;
 			}
 			
 			char info[16];
@@ -206,6 +206,7 @@ int MenuHandler_ReplayControls(Menu menu, MenuAction action, int param1, int par
 			delete menu;
 		}
 	}
+	return 0;
 }
 
 void CancelReplayControls(int client)

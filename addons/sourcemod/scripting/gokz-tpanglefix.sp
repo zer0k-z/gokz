@@ -96,12 +96,23 @@ void HookEvents()
 	}
 	// Prevent the server from crashing.
 	FindConVar("sv_parallel_sendsnapshot").SetBool(false);
+	FindConVar("sv_parallel_sendsnapshot").AddChangeHook(OnParallelSendSnapshotCvarChanged);
+
 	gI_ClientOffset = gamedataConf.GetOffset("ClientIndexOffset");
 	if (gI_ClientOffset == -1)
 	{
 		SetFailState("Failed to get ClientIndexOffset offset.");
 	}
 }
+
+void OnParallelSendSnapshotCvarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	if (convar.BoolValue)
+	{
+		convar.BoolValue = false;
+	}
+}
+
 public MRESReturn DHooks_OnWriteViewAngleUpdate_Pre(Address pThis)
 {
 	int client = LoadFromAddress(pThis + view_as<Address>(gI_ClientOffset), NumberType_Int32);
@@ -120,7 +131,7 @@ void PatchAngleFix()
 {
 	if (LoadFromAddress(gA_ViewAnglePatchAddress, NumberType_Int8) == 0)
 	{
-		StoreToAddress(gA_ViewAnglePatchAddress, 1, NumberType_Int8);
+		StoreToAddress(gA_ViewAnglePatchAddress, 1, NumberType_Int8, false);
 	}
 }
 
@@ -128,7 +139,7 @@ void RestoreAngleFix()
 {
 	if (LoadFromAddress(gA_ViewAnglePatchAddress, NumberType_Int8) == 1)
 	{
-		StoreToAddress(gA_ViewAnglePatchAddress, 0, NumberType_Int8);
+		StoreToAddress(gA_ViewAnglePatchAddress, 0, NumberType_Int8, false);
 	}
 }
 
